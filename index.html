@@ -3,15 +3,61 @@
 <head>
 <script type="text/javascript" src="container.js"></script>
 <script type="text/javascript">
+function ItemCounter(collection)
+{
+    this.countdown = function()
+    {
+        var i = 0,
+            max = 0;
+
+        if (collection instanceof Array)
+        {
+            max = collection.length;
+
+            if (!max)
+            {
+                console.log('There is nothing to count :(');
+            }
+            else
+            {
+                console.log('There are ' + max + ' items to count:');
+
+                for (; i < max; ++i)
+                {
+                    console.log('Item #' + i + ': ' + collection[i]);
+                }
+            }
+        }
+        else
+        {
+            console.log('Wrong argument type.');
+        }
+    };
+}
+
+ItemCounter.prototype.countdown = function()
+{
+    var data = this.data;
+
+    if (data)
+    {
+        console.log('There are ' + data.length + ' items to count:');
+        for (var i = 0; i < data.length; ++i)
+        {
+            console.log('Item #' + i + ': ' + data[i]);
+        }
+    }
+};
+
 function Lambda(name)
 {
     this.name = name;
-
-    this.sayHi = function()
-    {
-        console.log('Hello ' + this.name);
-    };
 }
+
+Lambda.prototype.hello = function()
+{
+    console.log('Hello ' + this.name);
+};
 
 function Printer(id)
 {
@@ -45,6 +91,7 @@ function Rocket()
 {
     this.ignited = false;
 }
+
 Rocket.prototype.ignition = function(launch_code)
 {
     if (!this.ignited)
@@ -53,6 +100,7 @@ Rocket.prototype.ignition = function(launch_code)
         console.log('Ignition code <' + launch_code + '> accepted, engine started...');
     }
 };
+
 Rocket.prototype.launch = function()
 {
     if (this.ignited)
@@ -61,12 +109,39 @@ Rocket.prototype.launch = function()
     }
 };
 
+function ItemFactory()
+{
+}
+
+ItemFactory.prototype.createItem = function(name)
+{
+    return Object.create(Item).setup(name);
+};
+
+var Item = {
+    setup: function(name)
+    {
+        this.name = name;
+        return this;
+    },
+
+    identify: function()
+    {
+        console.log('I am item <' + this.name + '>');
+    }
+};
+
 window.addEventListener('load', function() {
     var c = new Container();
 
+    // -------------------------------------------------
+
     c
         .set('username', 'James')
-        .set('password', 'azerty');
+        .set('password', 'azerty')
+        .set('collection', [1, 5, 10]);
+
+    // -------------------------------------------------
 
     c.register('wk1', RequiredWorker)
         .argument('@printer');
@@ -78,7 +153,10 @@ window.addEventListener('load', function() {
         .argument('abc-def-ghi');
 */
     c.register('lambda', Lambda)
-        .argument('%username%');
+        .argument('%username%:%password%');
+
+    c.register('counter', ItemCounter)
+        .argument('%collection%');
 
     c.register('rocket', Rocket)
         .method(Rocket.prototype.ignition, '%password%');
@@ -91,8 +169,17 @@ window.addEventListener('load', function() {
         };
     });
 
-    c.get('lambda')
-        .sayHi();
+    c.register('item', ItemFactory.prototype.createItem)
+        .argument('number 9');
+
+    // -------------------------------------------------
+
+    try {
+        c.get('lambda')
+            .hello();
+    } catch(e) {
+        console.log('Exception: ' + e.message);
+    }
 
     try {
         c.get('wk1')
@@ -108,8 +195,12 @@ window.addEventListener('load', function() {
         console.log('Exception: ' + e.message);
     }
 
-    c.get('rocket')
-        .launch();
+    try {
+        c.get('rocket')
+            .launch();
+    } catch(e) {
+        console.log('Exception: ' + e.message);
+    }
 
     try {
         c.get('mission')
@@ -118,7 +209,21 @@ window.addEventListener('load', function() {
         console.log('Exception: ' + e.message);
     }
 
-    console.log(c.destroy('mission'));
+    // c.destroy('mission');
+
+    try {
+        c.get('item')
+            .identify();
+    } catch(e) {
+        console.log('Exception: ' + e.message);
+    }
+
+    try {
+        c.get('counter')
+            .countdown();
+    } catch(e) {
+        console.log('Exception: ' + e.message);
+    }
 });
 </script>
 </head>

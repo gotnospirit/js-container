@@ -8,7 +8,7 @@ function evaluate(parameter, index, collection)
     var key = null,
         result = null;
 
-    if (parameter.isReference())
+    if (parameter.reference())
     {
         key = parameter.key();
         result = ContainerReferenceKeyword === key
@@ -26,68 +26,16 @@ function evaluate(parameter, index, collection)
         return result;
     }
     return parameter.value(this.parameters);
-};
-
-function Parameter(value, is_required)
-{
-    this.value_ = value;
-    this.is_required_ = undefined !== is_required ? !!is_required : true;
 }
 
-Parameter.prototype.optional = function()
+function substitute(content, hash)
 {
-    return !this.is_required_;
-};
-
-Parameter.prototype.isReference = function()
-{
-    var value = this.value_;
-
-    return this.isString() && value && '@' === value[0];
-};
-
-Parameter.prototype.isString = function()
-{
-    return 'string' === typeof(this.value_);
-};
-
-Parameter.prototype.key = function()
-{
-    var value = this.value_;
-
-    return (this.isString() && value)
-        ? value.substr(1)
-        : null;
-};
-
-Parameter.prototype.value = function(hash)
-{
-    var replacements = null,
+    var match = null,
         key = null,
-        result = this.value_;
-
-    if (this.isString())
-    {
-        replacements = this.match(hash);
-
-        if (replacements)
-        {
-            for (key in replacements)
-            {
-                result = result.replace(new RegExp('%' + key + '%', 'g'), replacements[key]);
-            }
-        }
-    }
-    return result;
-};
-
-Parameter.prototype.match = function(hash)
-{
-    var result = null,
-        content = this.value_,
-        match = null,
-        key = null,
-        value = null;
+        value = null,
+        placeholders = [],
+        i = 0,
+        max = 0;
 
     while (match = ParameterPattern.exec(content))
     {
@@ -96,13 +44,63 @@ Parameter.prototype.match = function(hash)
 
         if (undefined !== value)
         {
-            if (!result)
+            // Si le paramètre ne constitue qu'une unique substitution
+            if (match[0] === content)
             {
-                result = {};
+                // on renvoit directement la valeur associée
+                // -> on peut ainsi transférer autre chose que des strings
+                return value;
             }
-
-            result[key] = value;
+            else
+            {
+                // sinon, on collecte la valeur associée pour un remplacement ultérieur
+                placeholders.push(key, value);
+            }
         }
+    }
+
+    // On remplace les valeurs collectées
+    for (max = placeholders.length; i < max; i += 2)
+    {
+        content = content.replace(new RegExp('%' + placeholders[i] + '%', 'g'), placeholders[i + 1]);
+    }
+    return content;
+}
+
+function Parameter(value, is_required)
+{
+    this.value_ = value;
+    this.is_required_ = undefined !== is_required
+        ? !!is_required
+        : true;
+}
+
+Parameter.prototype.optional = function()
+{
+    return !this.is_required_;
+};
+
+Parameter.prototype.reference = function()
+{
+    var value = this.value_;
+
+    return 'string' === typeof(value) && value && '@' === value[0];
+};
+
+Parameter.prototype.key = function()
+{
+    return this.reference()
+        ? this.value_.substr(1)
+        : null;
+};
+
+Parameter.prototype.value = function(hash)
+{
+    var result = this.value_;
+
+    if ('string' === typeof(result) && result)
+    {
+        return substitute(result, hash);
     }
     return result;
 };
@@ -193,7 +191,9 @@ Container.prototype.register = function(id, callable, singleton)
 
 Container.prototype.set = function(key, value)
 {
-    this.parameters[key] = value;
+    this.parameters[key] = ('object' === typeof(value) && null !== value)
+        ? Object.create(value)
+        : value;
     return this;
 };
 
@@ -212,24 +212,30 @@ Container.prototype.get = function(id)
             result = this.instances[id] || null;
         }
 
+        // Si aucune instance n'a été conservée
         if (!result)
         {
+            // On en crée une nouvelle
             instance = Object.create(definition.callable.prototype);
-
+            // On appelle le constructeur
             result = definition.callable.apply(instance, definition.args.map(evaluate, this));
-
+            // S'il n'a pas retourné un nouvel objet
             if (!result)
             {
+                // alors il s'agit toujours de la même instance
                 result = instance;
             }
 
+            // On appelle les fonctions d'initialisation
             for (max = definition.calls.length; i < max; ++i)
             {
                 definition.calls[i][0].apply(result, definition.calls[i].slice(1).map(evaluate, this));
             }
 
+            // Et s'il s'agit d'un singleton
             if (definition.singleton)
             {
+                // On le stocke pour plus tard
                 this.instances[id] = result;
             }
         }

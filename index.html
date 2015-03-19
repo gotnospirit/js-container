@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<script type="text/javascript" src="container.js"></script>
+<script type="text/javascript">
+function Lambda(name)
+{
+    this.name = name;
+
+    this.sayHi = function()
+    {
+        console.log('Hello ' + this.name);
+    };
+}
+
+function Printer(id)
+{
+    this.id = id;
+}
+
+function RequiredWorker(printer)
+{
+    this.execute = function()
+    {
+        console.log('I am connected with the <' + printer.id + '> printer');
+    };
+}
+
+function OptionalWorker(printer)
+{
+    this.execute = function()
+    {
+        if (printer)
+        {
+            console.log('I am connected with the <' + printer.id + '> printer');
+        }
+        else
+        {
+            console.log('I am not connected to a printer');
+        }
+    };
+}
+
+function Rocket()
+{
+    this.ignited = false;
+}
+Rocket.prototype.ignition = function(launch_code)
+{
+    if (!this.ignited)
+    {
+        this.ignited = true;
+        console.log('Ignition code <' + launch_code + '> accepted, engine started...');
+    }
+};
+Rocket.prototype.launch = function()
+{
+    if (this.ignited)
+    {
+        console.log('Rocket launched!');
+    }
+};
+
+window.addEventListener('load', function() {
+    var c = new Container();
+
+    c
+        .set('username', 'James')
+        .set('password', 'azerty');
+
+    c.register('wk1', RequiredWorker)
+        .argument('@printer');
+
+    c.register('wk2', OptionalWorker)
+        .argument('@printer', false);
+/*
+    c.register('printer', Printer)
+        .argument('abc-def-ghi');
+*/
+    c.register('lambda', Lambda)
+        .argument('%username%');
+
+    c.register('rocket', Rocket)
+        .method(Rocket.prototype.ignition, '%password%');
+
+    c.register('mission', function Mission() {
+        return {
+            abort: function(target) {
+                console.log('Mission to <' + target + '> aborted!');
+            }
+        };
+    });
+
+    c.get('lambda')
+        .sayHi();
+
+    try {
+        c.get('wk1')
+            .execute();
+    } catch(e) {
+        console.log('Exception: ' + e.message);
+    }
+
+    try {
+        c.get('wk2')
+            .execute();
+    } catch(e) {
+        console.log('Exception: ' + e.message);
+    }
+
+    c.get('rocket')
+        .launch();
+
+    try {
+        c.get('mission')
+            .abort('Mars');
+    } catch(e) {
+        console.log('Exception: ' + e.message);
+    }
+
+    console.log(c.destroy('mission'));
+});
+</script>
+</head>
+<body>
+</body>
+</html>

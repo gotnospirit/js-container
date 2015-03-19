@@ -16,7 +16,7 @@ function ItemCounter(collection)
 
             if (!max)
             {
-                console.log('There is nothing to count :(');
+                console.warn('There is nothing to count :(');
             }
             else
             {
@@ -30,24 +30,10 @@ function ItemCounter(collection)
         }
         else
         {
-            console.log('Wrong argument type.');
+            console.error('Wrong argument type.');
         }
     };
 }
-
-ItemCounter.prototype.countdown = function()
-{
-    var data = this.data;
-
-    if (data)
-    {
-        console.log('There are ' + data.length + ' items to count:');
-        for (var i = 0; i < data.length; ++i)
-        {
-            console.log('Item #' + i + ': ' + data[i]);
-        }
-    }
-};
 
 function Lambda(name)
 {
@@ -82,7 +68,7 @@ function OptionalWorker(printer)
         }
         else
         {
-            console.log('I am not connected to a printer');
+            console.warn('I am not connected to a printer');
         }
     };
 }
@@ -131,6 +117,54 @@ var Item = {
     }
 };
 
+function Service()
+{
+    this.address = null;
+}
+
+Service.prototype.setup = function(address)
+{
+    this.address = address || null;
+};
+
+Service.prototype.connect = function()
+{
+    var address = this.address;
+
+    if (!address)
+    {
+        console.error('Service not configured');
+    }
+    else
+    {
+        console.log('Connecting to <' + this.address +'>');
+    }
+};
+
+function setAddress(instance)
+{
+    instance.address = 'localhost';
+}
+
+function HttpService()
+{
+}
+
+HttpService.prototype.setScheme = function(service)
+{
+    service.address = 'http://' + service.address;
+};
+
+HttpService.prototype.setPath = function(service)
+{
+    service.address += '/';
+};
+
+HttpService.setPort = function(service)
+{
+    service.address += ':80';
+};
+
 window.addEventListener('load', function() {
     var c = new Container();
 
@@ -153,7 +187,7 @@ window.addEventListener('load', function() {
         .argument('abc-def-ghi');
 */
     c.register('lambda', Lambda)
-        .argument('%username%:%password%');
+        .argument('%username%');
 
     c.register('counter', ItemCounter)
         .argument('%collection%');
@@ -164,10 +198,18 @@ window.addEventListener('load', function() {
     c.register('mission', function Mission() {
         return {
             abort: function(target) {
-                console.log('Mission to <' + target + '> aborted!');
+                console.warn('Mission to <' + target + '> aborted!');
             }
         };
     });
+
+    c.register('service', Service)
+        .configure(setAddress)
+        .configure('@configurator', HttpService.prototype.setScheme)
+        .configure(HttpService.setPort)
+        .configure('@configurator', 'setPath');
+
+    c.register('configurator', HttpService);
 
     c.register('item', ItemFactory.prototype.createItem)
         .argument('number 9');
@@ -178,35 +220,35 @@ window.addEventListener('load', function() {
         c.get('lambda')
             .hello();
     } catch(e) {
-        console.log('Exception: ' + e.message);
+        console.error('Exception: ' + e.message);
     }
 
     try {
         c.get('wk1')
             .execute();
     } catch(e) {
-        console.log('Exception: ' + e.message);
+        console.error('Exception: ' + e.message);
     }
 
     try {
         c.get('wk2')
             .execute();
     } catch(e) {
-        console.log('Exception: ' + e.message);
+        console.error('Exception: ' + e.message);
     }
 
     try {
         c.get('rocket')
             .launch();
     } catch(e) {
-        console.log('Exception: ' + e.message);
+        console.error('Exception: ' + e.message);
     }
 
     try {
         c.get('mission')
             .abort('Mars');
     } catch(e) {
-        console.log('Exception: ' + e.message);
+        console.error('Exception: ' + e.message);
     }
 
     // c.destroy('mission');
@@ -215,14 +257,21 @@ window.addEventListener('load', function() {
         c.get('item')
             .identify();
     } catch(e) {
-        console.log('Exception: ' + e.message);
+        console.error('Exception: ' + e.message);
     }
 
     try {
         c.get('counter')
             .countdown();
     } catch(e) {
-        console.log('Exception: ' + e.message);
+        console.error('Exception: ' + e.message);
+    }
+
+    try {
+        c.get('service')
+            .connect();
+    } catch(e) {
+        console.error('Exception: ' + e.message);
     }
 });
 </script>

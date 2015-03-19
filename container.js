@@ -11,7 +11,7 @@ function evaluate(parameter, index, collection)
     if (parameter.reference())
     {
         key = parameter.key();
-        result = ContainerReferenceKeyword === key
+        result = key === ContainerReferenceKeyword
             ? this
             : this.get(key);
 
@@ -67,6 +67,75 @@ function substitute(content, hash)
     }
     return content;
 }
+
+function Configurator(callable, key)
+{
+    if (!key)
+    {
+        key = null;
+
+        if ('function' !== typeof(callable))
+        {
+            throw new Error('Invalid callable <' + callable + '>');
+        }
+    }
+    else
+    {
+        if ('string' !== typeof(key) || '@' !== key[0])
+        {
+            throw new Error('Invalid reference <' + key + '>');
+        }
+
+        key = key.substr(1);
+        if (!key || key === ContainerReferenceKeyword)
+        {
+            throw new Error('Invalid reference <' + key + '>');
+        }
+
+        if ('function' !== typeof(callable) && 'string' !== typeof(callable))
+        {
+            throw new Error('Invalid callable <' + callable + '>');
+        }
+    }
+
+    this.callable_ = callable;
+    this.reference_ = key;
+}
+
+Configurator.prototype.execute = function(container, instance)
+{
+    var key = this.reference_,
+        fn = this.callable_,
+        o = null,
+        type = typeof(fn);
+
+    if (null === key)
+    {
+        fn(instance);
+    }
+    else
+    {
+        o = container.get(key);
+
+        if (!o)
+        {
+            throw new Error('<' + key + '> not found.');
+        }
+
+        if ('string' === type && undefined !== o[fn])
+        {
+            o[fn](instance);
+        }
+        else if ('function' === type)
+        {
+            fn.call(o, instance);
+        }
+        else
+        {
+            throw new Error('Invalid callable <' + fn + '>');
+        }
+    }
+};
 
 function Parameter(value, is_required)
 {
@@ -143,7 +212,7 @@ Container.prototype.register = function(id, callable, singleton)
     {
         throw new Error('The 2nd argument must be a valid callable');
     }
-    else if (ContainerReferenceKeyword === id)
+    else if (id === ContainerReferenceKeyword)
     {
         throw new Error('<' + ContainerReferenceKeyword + '> is a reserved keyword');
     }
@@ -156,7 +225,8 @@ Container.prototype.register = function(id, callable, singleton)
         callable: callable,
         singleton: undefined !== singleton ? !!singleton : true,
         args: [],
-        calls: []
+        calls: [],
+        configs: []
     };
 
     this.definitions[id] = definition;
@@ -170,23 +240,48 @@ Container.prototype.register = function(id, callable, singleton)
 
         method: function(fn)
         {
-            var args = Array.prototype.slice.call(arguments, 1),
-                i = 0,
-                max = args.length,
-                argument = null;
+            var i = 1,
+                max = arguments.length,
+                args = null;
 
             if ('function' !== typeof(fn))
             {
                 throw new Error('The 1st argument must be a valid callable');
             }
 
-            argument = [fn];
+            args = [fn];
 
             for (; i < max; ++i)
             {
-                argument.push(new Parameter(args[i], true));
+                args.push(new Parameter(arguments[i], true));
             }
-            definition.calls.push(argument);
+            definition.calls.push(args);
+            return this;
+        },
+
+        /**
+         * configure('@reference', 'setupInstance')
+         *
+         * configure('@reference', Service.prototype.setupInstance)
+         *
+         * configure(function(instance) {
+         *  instance.setup();
+         * });
+         */
+        configure: function(fn)
+        {
+            switch (arguments.length)
+            {
+                case 1:
+                    definition.configs.push(new Configurator(arguments[0]));
+                    break;
+                case 2:
+                    definition.configs.push(new Configurator(arguments[1], arguments[0]));
+                    break;
+                default:
+                    throw new Error('Invalid configurator');
+                    break;
+            }
             return this;
         }
     };
@@ -229,8 +324,14 @@ Container.prototype.get = function(id)
                 result = instance;
             }
 
-            // On appelle les fonctions d'initialisation
-            for (max = definition.calls.length; i < max; ++i)
+            // On appelle les fonctions de configuration
+            for (i = 0, max = definition.configs.length; i < max; ++i)
+            {
+                definition.configs[i].execute(this, result);
+            }
+
+            // On appelle les fonctions post-configuration
+            for (i = 0, max = definition.calls.length; i < max; ++i)
             {
                 definition.calls[i][0].apply(result, definition.calls[i].slice(1).map(evaluate, this));
             }

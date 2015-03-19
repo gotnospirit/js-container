@@ -47,6 +47,7 @@ function substitute(content, hash)
             // Si le paramètre ne constitue qu'une unique substitution
             if (match[0] === content)
             {
+                ParameterPattern.lastIndex = 0;
                 // on renvoit directement la valeur associée
                 // -> on peut ainsi transférer autre chose que des strings
                 return value;
@@ -89,9 +90,11 @@ Parameter.prototype.reference = function()
 
 Parameter.prototype.key = function()
 {
+    var value = this.value_;
+
     return this.reference()
-        ? this.value_.substr(1)
-        : null;
+        ? value.substr(1)
+        : value;
 };
 
 Parameter.prototype.value = function(hash)

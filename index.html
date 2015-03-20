@@ -6,10 +6,19 @@
 function UnitTest(container, service_name, method_name, expected_result, throws_exception)
 {
     var msg = '[' + service_name + '::' + method_name + '] ',
-        result = null;
+        o = null,
+        result = null,
+        ctor_args = Array.prototype.slice.call(arguments, 5);
 
     try {
-        result = container.get(service_name)[method_name]();
+        if (!(ctor_args instanceof Array))
+        {
+            ctor_args = [];
+        }
+        ctor_args.unshift(service_name);
+
+        o = container.get.apply(container, ctor_args);
+        result = o[method_name]();
 
         if (result === expected_result)
         {
@@ -186,6 +195,14 @@ HttpService.setPort = function(service)
     service.address += ':80';
 };
 
+function Player(memento)
+{
+    this.start = function()
+    {
+        return 'Player <' + memento.name + '> ready!';
+    };
+}
+
 window.addEventListener('load', function() {
     var c = new Container();
 
@@ -236,6 +253,8 @@ window.addEventListener('load', function() {
     c.register('item', ItemFactory.prototype.createItem)
         .argument('number 9');
 
+    c.register('player', Player, false);
+
     // -------------------------------------------------
 
     UnitTest(c, 'lambda', 'hello', 'Hello James');
@@ -246,6 +265,8 @@ window.addEventListener('load', function() {
     UnitTest(c, 'item', 'identify', 'I am item <number 9>');
     UnitTest(c, 'counter', 'countdown', 'There are 3 items to count:\nItem #0: 1\nItem #1: 5\nItem #2: 10');
     UnitTest(c, 'service', 'connect', 'Connecting to <http://localhost:80/>');
+    UnitTest(c, 'player', 'start', 'Player <DarthVader> ready!', false, {'name': 'DarthVader'});
+    UnitTest(c, 'player', 'start', 'Player <ObiwanKenobi> ready!', false, {'name': 'ObiwanKenobi'});
 
     // c.destroy('mission');
 });

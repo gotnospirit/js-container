@@ -4,6 +4,11 @@
     var ParameterPattern = /%([a-zA-Z_-]+)%/g,
         ContainerReferenceKeyword = 'container';
 
+    function copy(value)
+    {
+        return JSON.parse(JSON.stringify(value));
+    }
+
     function evaluate(parameter, index, collection)
     {
         var key = null,
@@ -26,7 +31,7 @@
             }
             return result;
         }
-        return parameter.value(this.parameters);
+        return parameter.compute(this.parameters);
     }
 
     function substitute(content, hash)
@@ -37,6 +42,11 @@
             placeholders = [],
             i = 0,
             max = 0;
+
+        if ('object' !== typeof(hash) || !hash)
+        {
+            throw new Error('The 2nd argument must be a hash');
+        }
 
         while (match = ParameterPattern.exec(content))
         {
@@ -71,8 +81,8 @@
 
     /**
      * @class Configurator
-     * @param {Function|String} callable .
-     * @param {String} [key] L'identifiant d'une définition.
+     * @param {Function|String} callable
+     * @param {String} [key] L'identifiant d'une {@link Definition|définition}.
      * @throws {Error} Lorsqu'aucun identifiant n'est fourni, le 1er argument doit être une fonction valide.
      * @throws {Error} Identifiant de définition invalide.
      * @throws {Error} Identifiant réservé utilisé.
@@ -109,22 +119,33 @@
             }
         }
 
-        this.callable_ = callable;
-        this.reference_ = key;
+        /**
+         * @member Configurator#callable
+         * @type {Function|String}
+         * @private
+         */
+        this.callable = callable;
+        /**
+         * @member Configurator#reference
+         * @type {String}
+         * @private
+         */
+        this.reference = key;
     }
 
     /**
      * Configure une instance créée par le conteneur.
      *
-     * @param {Container} container .
-     * @param {*} instance .
+     * @param {Container} container
+     * @param {*} instance
      * @throws {Error} Référence introuvable.
      * @throws {Error} Méthode introuvable sur la référence.
+     * @function Configurator#execute
      */
     Configurator.prototype.execute = function(container, instance)
     {
-        var key = this.reference_,
-            fn = this.callable_,
+        var key = this.reference,
+            fn = this.callable,
             o = null,
             type = typeof(fn);
 
@@ -158,14 +179,25 @@
 
     /**
      * @class Parameter
-     * @param {*} value .
+     * @param {*} value
      * @param {Boolean} [is_required=true] Indique si, lorsqu'il s'agit d'une référence introuvable, une exception doit être levée.
      * @private
      */
     function Parameter(value, is_required)
     {
-        this.value_ = value;
-        this.is_required_ = undefined !== is_required
+        /**
+         * @member Parameter#value
+         * @type {*}
+         * @private
+         */
+        this.value = value;
+        /**
+         * @member Parameter#is_required
+         * @type {Boolean}
+         * @default true
+         * @private
+         */
+        this.is_required = undefined !== is_required
             ? !!is_required
             : true;
     }
@@ -173,21 +205,29 @@
     /**
      * Indique si le paramètre est optionnel. c'est à dire que s'il s'agit d'une référence et qu'elle est introuvable, aucune exception ne doit être levée.
      *
-     * @returns {Boolean} .
+     * @returns {Boolean}
+     * @function Parameter#optional
+     *
+     * @example
+     * optional()
      */
     Parameter.prototype.optional = function()
     {
-        return !this.is_required_;
+        return !this.is_required;
     };
 
     /**
      * Indique s'il s'agit d'une référence.
      *
-     * @returns {Boolean} .
+     * @returns {Boolean}
+     * @function Parameter#reference
+     *
+     * @example
+     * reference()
      */
     Parameter.prototype.reference = function()
     {
-        var value = this.value_;
+        var value = this.value;
 
         return 'string' === typeof(value) && value && '@' === value[0];
     };
@@ -195,11 +235,15 @@
     /**
      * Retourne l'identifiant de la référence ou la valeur brute s'il s'agit d'un paramètre "normal".
      *
-     * @return {*} .
+     * @return {*}
+     * @function Parameter#key
+     *
+     * @example
+     * key()
      */
     Parameter.prototype.key = function()
     {
-        var value = this.value_;
+        var value = this.value;
 
         return this.reference()
             ? value.substr(1)
@@ -209,12 +253,16 @@
     /**
      * Retourne la valeur du paramètre.
      *
-     * @param {Object} hash La collection des paramètres définis sur le conteneur.
-     * @returns {*} .
+     * @param {Hash<String, *>} hash La collection des paramètres définis sur le conteneur.
+     * @returns {*}
+     * @function Parameter#compute
+     *
+     * @example
+     * compute({ 'name' : 'James' })
      */
-    Parameter.prototype.value = function(hash)
+    Parameter.prototype.compute = function(hash)
     {
-        var result = this.value_;
+        var result = this.value;
 
         if ('string' === typeof(result) && result)
         {
@@ -231,15 +279,34 @@
      */
     function Container()
     {
+        /**
+         * @member Container#definitions
+         * @type {Hash<String, Definition>}
+         * @private
+         */
         this.definitions = {};
+        /**
+         * @member Container#parameters
+         * @type {Hash<String, *>}
+         * @private
+         */
         this.parameters = {};
+        /**
+         * @member Container#instances
+         * @type {Hash<String, *>}
+         * @private
+         */
         this.instances = {};
     }
 
     /**
      * Réinitialise le conteneur.
      *
-     * @returns {Container} .
+     * @returns {Container}
+     * @function Container#clear
+     *
+     * @example
+     * clear()
      */
     Container.prototype.clear = function()
     {
@@ -252,8 +319,12 @@
     /**
      * Supprime un singleton.
      *
-     * @param {String} id .
-     * @returns {Boolean} .
+     * @param {String} id
+     * @returns {Boolean}
+     * @function Container#destroy
+     *
+     * @example
+     * destroy('my_component');
      */
     Container.prototype.destroy = function(id)
     {
@@ -267,15 +338,29 @@
     };
 
     /**
-     * Crée une nouvelle définition.
+     * Crée une nouvelle {@link Definition|définition}.
      *
-     * @param {String} id .
-     * @param {Function} callable .
+     * @param {String} id
+     * @param {Function} callable
      * @param {Boolean} [singleton=true] Indique si la définition concerne un singleton.
-     * @returns {Definition} .
+     * @returns {Definition}
      * @throws {Error} L'identifiant doit être une chaîne non vide.
      * @throws {Error} Le 2nd argument doit être une fonction valide.
      * @throws {Error} L'identifiant ne peut pas valoir "container" car c'est un mot réservé.
+     * @function Container#register
+     *
+     * @example
+     * register('my_component', ComponentConstructor)
+     *
+     * @example
+     * register('my_component', ComponentConstructor, false)
+     *
+     * @example
+     * register('my_component', function InlineFactory() {
+     *  return {
+     *    execute: function() {}
+     *  };
+     * })
      */
     Container.prototype.register = function(id, callable, singleton)
     {
@@ -308,16 +393,28 @@
 
         /**
          * @class Definition
-         * @inner
-         * @public
+         * @private
          */
         return {
             /**
              * Ajoute un argument qui sera transmis lors de la création d'une nouvelle instance.
              *
-             * @param {*} value .
+             * @param {*} value
              * @param {Boolean} [is_required=true] Indique si, lorsqu'il s'agit d'une référence introuvable, une exception doit être levée.
-             * @returns {Definition} .
+             * @returns {Definition}
+             * @function Definition#argument
+             *
+             * @example
+             * argument(123)
+             *
+             * @example
+             * argument('%username%')
+             *
+             * @example
+             * argument([1, 5, 10])
+             *
+             * @example
+             * argument('@reference', false)
              */
             argument: function(value, is_required)
             {
@@ -328,10 +425,14 @@
             /**
              * Ajoute la description d'un appel de méthode post-configuration.
              *
-             * @param {Function} fn .
-             * @param {*} ...arg .
-             * @returns {Definition} .
+             * @param {Function} fn
+             * @param {*} [...arg]
+             * @returns {Definition}
              * @throws {Error} Le 1er argument doit être une fonction valide.
+             * @function Definition#method
+             *
+             * @example
+             * method(Rocket.prototype.ignition, '%secret_code%')
              */
             method: function(fn)
             {
@@ -357,14 +458,18 @@
             /**
              * Ajoute la description d'un appel à un configurateur post-instanciation.
              *
-             * @returns {Definition} .
-             * @throws {Error} .
+             * @returns {Definition}
+             * @throws {Error}
+             * @function Definition#configure
              *
-             * @example configure('@reference', 'setupInstance')
+             * @example
+             * configure('@reference', 'setupInstance')
              *
-             * @example configure('@reference', Service.prototype.setupInstance)
+             * @example
+             * configure('@reference', MyConfigurator.prototype.setupInstance)
              *
-             * @example configure(function MyConfigurator(instance) {
+             * @example
+             * configure(function MyConfigurator(instance) {
              *  instance.setup();
              * });
              */
@@ -388,35 +493,51 @@
     };
 
     /**
-     * Définit un paramètre utilisable pour les appels aux méthodes "argument" & "method" des définitions.
-     * S'il s'agit d'un objet, il est copié afin d'éviter toutes modifications en dehors du conteneur.
+     * Définit un paramètre utilisable pour les appels aux méthodes {@link Definition#argument|argument} & {@link Definition#method|method} des {@link Definition|définitions}.
+     * Afin d'éviter toutes modifications en dehors du conteneur, la valeur est copiée.
      *
-     * @param {String} key .
-     * @param {*} value .
-     * @returns {Container} .
+     * @param {String} key
+     * @param {*} value
+     * @returns {Container}
+     * @function Container#set
+     *
+     * @example
+     * set('username', 'James')
+     *
+     * @example
+     * set('scores', [1, 5, 10])
      */
     Container.prototype.set = function(key, value)
     {
-        this.parameters[key] = ('object' === typeof(value) && null !== value)
-            ? Object.create(value)
-            : value;
+        this.parameters[key] = copy(value);
         return this;
     };
 
     /**
-     * Retourne une instance pour la définition demandée.
+     * Retourne une instance pour la {@link Definition|définition} demandée.
      * S'il s'agit de la définition d'un singleton et qu'aucune instance n'existe, elle est créée, configurée, puis stockée.
-     * Dans le cas contraire, une nouvelle instance est toujours créée & configurée.
+     * Dans le cas contraire, une nouvelle instance est toujours créée et configurée.
      *
-     * @param {String} id .
-     * @returns {Object} .
-     * @throws {Error} .
+     * A noter que les paramètres additionnels sont transmis après les paramètres définis par la définition.
+     *
+     * @param {String} id
+     * @param {*} [...ctor_arg] Paramètres additionnels transmis lors de la création d'une nouvelle instance
+     * @returns {Object}
+     * @throws {Error}
+     * @function Container#get
+     *
+     * @example
+     * get('my_component')
+     *
+     * @example
+     * get('my_component', 123)
      */
     Container.prototype.get = function(id)
     {
         var result = null,
             instance = null,
             definition = this.definitions[id],
+            args = Array.prototype.slice.call(arguments, 1).map(copy),
             i = 0,
             max = 0;
 
@@ -432,8 +553,10 @@
             {
                 // On en crée une nouvelle
                 instance = Object.create(definition.callable.prototype);
+                // On construit le tableau des paramètres du constructeur
+                args = definition.args.map(evaluate, this).concat(args);
                 // On appelle le constructeur
-                result = definition.callable.apply(instance, definition.args.map(evaluate, this));
+                result = definition.callable.apply(instance, args);
                 // S'il n'a pas retourné un nouvel objet
                 if (!result)
                 {

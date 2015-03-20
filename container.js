@@ -340,6 +340,8 @@
     /**
      * Crée une nouvelle {@link Definition|définition}.
      *
+     * Produit un warning si la clé est déjà définie.
+     *
      * @param {String} id
      * @param {Function} callable
      * @param {Boolean} [singleton=true] Indique si la définition concerne un singleton.
@@ -496,6 +498,8 @@
      * Définit un paramètre utilisable pour les appels aux méthodes {@link Definition#argument|argument} & {@link Definition#method|method} des {@link Definition|définitions}.
      * Afin d'éviter toutes modifications en dehors du conteneur, la valeur est copiée.
      *
+     * Produit un warning si la clé est déjà définie.
+     *
      * @param {String} key
      * @param {*} value
      * @returns {Container}
@@ -509,6 +513,10 @@
      */
     Container.prototype.set = function(key, value)
     {
+        if (undefined !== this.parameters[key])
+        {
+            console.warn('<' + key + '> is already defined');
+        }
         this.parameters[key] = copy(value);
         return this;
     };

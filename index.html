@@ -3,6 +3,36 @@
 <head>
 <script type="text/javascript" src="container.js"></script>
 <script type="text/javascript">
+function UnitTest(container, service_name, method_name, expected_result, throws_exception)
+{
+    var msg = '[' + service_name + '::' + method_name + '] ',
+        result = null;
+
+    try {
+        result = container.get(service_name)[method_name]();
+
+        if (result === expected_result)
+        {
+            msg += ' SUCCEED';
+        }
+        else
+        {
+            msg += ' FAILED (' + result + ')';
+        }
+    } catch(e) {
+        if (throws_exception && e.message === expected_result)
+        {
+            msg += ' SUCCEED';
+        }
+        else
+        {
+            msg += ' FAILED (Exception: ' + e.message + ')';
+        }
+    }
+
+    console.log(msg);
+}
+
 function ItemCounter(collection)
 {
     this.countdown = function()
@@ -16,22 +46,20 @@ function ItemCounter(collection)
 
             if (!max)
             {
-                console.warn('There is nothing to count :(');
+                return 'There is nothing to count :(';
             }
             else
             {
-                console.log('There are ' + max + ' items to count:');
+                var result = ['There are ' + max + ' items to count:'];
 
                 for (; i < max; ++i)
                 {
-                    console.log('Item #' + i + ': ' + collection[i]);
+                    result.push('Item #' + i + ': ' + collection[i]);
                 }
+                return result.join('\n');
             }
         }
-        else
-        {
-            console.error('Wrong argument type.');
-        }
+        throw new Error('Wrong argument type.');
     };
 }
 
@@ -42,7 +70,7 @@ function Lambda(name)
 
 Lambda.prototype.hello = function()
 {
-    console.log('Hello ' + this.name);
+    return 'Hello ' + this.name;
 };
 
 function Printer(id)
@@ -54,7 +82,7 @@ function RequiredWorker(printer)
 {
     this.execute = function()
     {
-        console.log('I am connected with the <' + printer.id + '> printer');
+        return 'I am connected with the <' + printer.id + '> printer';
     };
 }
 
@@ -64,12 +92,9 @@ function OptionalWorker(printer)
     {
         if (printer)
         {
-            console.log('I am connected with the <' + printer.id + '> printer');
+            return 'I am connected with the <' + printer.id + '> printer';
         }
-        else
-        {
-            console.warn('I am not connected to a printer');
-        }
+        return 'I am not connected to a printer';
     };
 }
 
@@ -80,10 +105,9 @@ function Rocket()
 
 Rocket.prototype.ignition = function(launch_code)
 {
-    if (!this.ignited)
+    if (!this.ignited && 'azerty' === launch_code)
     {
         this.ignited = true;
-        console.log('Ignition code <' + launch_code + '> accepted, engine started...');
     }
 };
 
@@ -91,7 +115,7 @@ Rocket.prototype.launch = function()
 {
     if (this.ignited)
     {
-        console.log('Rocket launched!');
+        return 'Rocket launched!';
     }
 };
 
@@ -113,7 +137,7 @@ var Item = {
 
     identify: function()
     {
-        console.log('I am item <' + this.name + '>');
+        return 'I am item <' + this.name + '>';
     }
 };
 
@@ -133,12 +157,9 @@ Service.prototype.connect = function()
 
     if (!address)
     {
-        console.error('Service not configured');
+        throw new Error('Service not configured');
     }
-    else
-    {
-        console.log('Connecting to <' + this.address +'>');
-    }
+    return 'Connecting to <' + this.address +'>';
 };
 
 function setAddress(instance)
@@ -195,13 +216,14 @@ window.addEventListener('load', function() {
     c.register('rocket', Rocket)
         .method(Rocket.prototype.ignition, '%password%');
 
-    c.register('mission', function Mission() {
+    c.register('mission', function Mission(target) {
         return {
-            abort: function(target) {
-                console.warn('Mission to <' + target + '> aborted!');
+            abort: function() {
+                return 'Mission to <' + target + '> aborted!';
             }
         };
-    });
+    })
+    .argument('Mars');
 
     c.register('service', Service)
         .configure(setAddress)
@@ -216,63 +238,16 @@ window.addEventListener('load', function() {
 
     // -------------------------------------------------
 
-    try {
-        c.get('lambda')
-            .hello();
-    } catch(e) {
-        console.error('Exception: ' + e.message);
-    }
-
-    try {
-        c.get('wk1')
-            .execute();
-    } catch(e) {
-        console.error('Exception: ' + e.message);
-    }
-
-    try {
-        c.get('wk2')
-            .execute();
-    } catch(e) {
-        console.error('Exception: ' + e.message);
-    }
-
-    try {
-        c.get('rocket')
-            .launch();
-    } catch(e) {
-        console.error('Exception: ' + e.message);
-    }
-
-    try {
-        c.get('mission')
-            .abort('Mars');
-    } catch(e) {
-        console.error('Exception: ' + e.message);
-    }
+    UnitTest(c, 'lambda', 'hello', 'Hello James');
+    UnitTest(c, 'wk1', 'execute', '<printer> not found.', true);
+    UnitTest(c, 'wk2', 'execute', 'I am not connected to a printer');
+    UnitTest(c, 'rocket', 'launch', 'Rocket launched!');
+    UnitTest(c, 'mission', 'abort', 'Mission to <Mars> aborted!');
+    UnitTest(c, 'item', 'identify', 'I am item <number 9>');
+    UnitTest(c, 'counter', 'countdown', 'There are 3 items to count:\nItem #0: 1\nItem #1: 5\nItem #2: 10');
+    UnitTest(c, 'service', 'connect', 'Connecting to <http://localhost:80/>');
 
     // c.destroy('mission');
-
-    try {
-        c.get('item')
-            .identify();
-    } catch(e) {
-        console.error('Exception: ' + e.message);
-    }
-
-    try {
-        c.get('counter')
-            .countdown();
-    } catch(e) {
-        console.error('Exception: ' + e.message);
-    }
-
-    try {
-        c.get('service')
-            .connect();
-    } catch(e) {
-        console.error('Exception: ' + e.message);
-    }
 });
 </script>
 </head>
